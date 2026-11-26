@@ -1,16 +1,25 @@
 "use client";
 
-// One document's workspace: chat (with history) in the middle, source panel on the right.
-// (Summary and Extract tabs come in the next milestone.)
+// One document's workspace with three tabs: Chat | Summary | Extract.
+// On the Chat tab, the source panel on the right shows where an answer came from.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ChatWindow from "@/components/ChatWindow";
 import type { SourceGroup } from "@/components/CitationChip";
 import { useDocuments } from "@/components/DocumentsProvider";
+import ExtractTable from "@/components/ExtractTable";
 import SourcePanel from "@/components/SourcePanel";
 import StatusBadge from "@/components/StatusBadge";
+import SummaryCard from "@/components/SummaryCard";
 import { askQuestion, createChat, listChats, listMessages, type Chat, type Message } from "@/lib/api";
+
+const TABS = [
+  { id: "chat", label: "Chat" },
+  { id: "summary", label: "Summary" },
+  { id: "extract", label: "Extract" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
 
 function errorText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -20,6 +29,7 @@ export default function DocumentWorkspace({ documentId }: { documentId: number }
   const { documents, loading: documentsLoading } = useDocuments();
   const doc = documents.find((d) => d.id === documentId);
 
+  const [tab, setTab] = useState<Tab>("chat");
   const [chats, setChats] = useState<Chat[]>([]); // this document's chats, newest first
   const [chatId, setChatId] = useState<number | null>(null); // null = new, unsaved chat
   const [messages, setMessages] = useState<Message[]>([]);
@@ -140,62 +150,102 @@ export default function DocumentWorkspace({ documentId }: { documentId: number }
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header: document info + chat history */}
-        <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <Link href="/" className="text-xs font-medium text-slate-400 hover:text-indigo-600">
-              ← Dashboard
-            </Link>
-            <div className="mt-0.5 flex items-center gap-3">
-              <h1 className="truncate text-lg font-semibold text-slate-900" title={doc.filename}>
-                {doc.filename}
-              </h1>
-              <StatusBadge status={doc.status} />
-              {doc.status === "ready" && (
-                <span className="shrink-0 text-sm text-slate-400">{doc.pages} pages</span>
-              )}
+        {/* Header: document info, tabs, and (on the Chat tab) chat history */}
+        <header className="border-b border-slate-200 bg-white px-6 pt-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <Link href="/" className="text-xs font-medium text-slate-400 hover:text-indigo-600">
+                ← Dashboard
+              </Link>
+              <div className="mt-0.5 flex items-center gap-3">
+                <h1 className="truncate text-lg font-semibold text-slate-900" title={doc.filename}>
+                  {doc.filename}
+                </h1>
+                <StatusBadge status={doc.status} />
+                {doc.status === "ready" && (
+                  <span className="shrink-0 text-sm text-slate-400">{doc.pages} pages</span>
+                )}
+              </div>
             </div>
+
+            {tab === "chat" && (
+              <>
+                <label className="sr-only" htmlFor="chat-history">
+                  Chat history
+                </label>
+                <select
+                  id="chat-history"
+                  value={chatId ?? ""}
+                  onChange={(e) => openChat(e.target.value ? Number(e.target.value) : null)}
+                  disabled={thinking}
+                  className="max-w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                >
+                  {chatId === null && <option value="">New chat</option>}
+                  {chats.map((chat) => (
+                    <option key={chat.id} value={chat.id}>
+                      {chat.title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => openChat(null)}
+                  disabled={chatId === null || thinking}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  + New chat
+                </button>
+              </>
+            )}
           </div>
 
-          <label className="sr-only" htmlFor="chat-history">
-            Chat history
-          </label>
-          <select
-            id="chat-history"
-            value={chatId ?? ""}
-            onChange={(e) => openChat(e.target.value ? Number(e.target.value) : null)}
-            disabled={thinking}
-            className="max-w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            {chatId === null && <option value="">New chat</option>}
-            {chats.map((chat) => (
-              <option key={chat.id} value={chat.id}>
-                {chat.title}
-              </option>
+          <nav className="mt-3 flex gap-6" role="tablist">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className={`-mb-px border-b-2 pb-2.5 text-sm font-medium ${
+                  tab === t.id
+                    ? "border-indigo-600 text-indigo-700"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {t.label}
+              </button>
             ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => openChat(null)}
-            disabled={chatId === null || thinking}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            + New chat
-          </button>
+          </nav>
         </header>
 
-        <ChatWindow
-          messages={messages}
-          thinking={thinking}
-          disabledReason={disabledReason}
-          error={error}
-          onAsk={handleAsk}
-          activeSourceKey={activeSource?.key ?? null}
-          onSelectSource={(key, source) => setActiveSource({ key, source })}
-        />
+        {/* All tabs stay mounted (just hidden), so switching tabs keeps their content */}
+        <div className={tab === "chat" ? "flex min-h-0 flex-1" : "hidden"}>
+          <ChatWindow
+            messages={messages}
+            thinking={thinking}
+            disabledReason={disabledReason}
+            error={error}
+            onAsk={handleAsk}
+            activeSourceKey={activeSource?.key ?? null}
+            onSelectSource={(key, source) => setActiveSource({ key, source })}
+          />
+        </div>
+        <div className={tab === "summary" ? "flex-1 overflow-y-auto" : "hidden"}>
+          <SummaryCard documentId={documentId} disabledReason={disabledReason} />
+        </div>
+        <div className={tab === "extract" ? "flex-1 overflow-y-auto" : "hidden"}>
+          <ExtractTable
+            documentId={documentId}
+            filename={doc.filename}
+            disabledReason={disabledReason}
+          />
+        </div>
       </div>
 
-      <SourcePanel source={activeSource?.source ?? null} onClose={() => setActiveSource(null)} />
+      {tab === "chat" && (
+        <SourcePanel source={activeSource?.source ?? null} onClose={() => setActiveSource(null)} />
+      )}
     </div>
   );
 }

@@ -95,3 +95,16 @@ class Message(Base):
     # List of {document_id, document, page, snippet}; empty for user messages
     citations: Mapped[list] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Summary(Base):
+    """The latest AI summary of a document (one per document)."""
+    __tablename__ = "summaries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    summary: Mapped[str] = mapped_column(Text)
+    key_points: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

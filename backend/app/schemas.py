@@ -1,7 +1,8 @@
 """Shapes of the data the API receives and returns (shared contract with the frontend)."""
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 
 # ---------- Auth ----------
@@ -110,3 +111,34 @@ class DashboardStats(BaseModel):
     documents: int
     pages_processed: int  # pages in documents that are "ready"
     questions_asked: int
+
+
+# ---------- Insights: summary + extraction ----------
+class SummaryOut(BaseModel):
+    """Response of POST /api/documents/{id}/summarize and GET /api/documents/{id}/summary."""
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: int
+    summary: str
+    key_points: list[str]
+    created_at: datetime
+
+
+class ExtractRequest(BaseModel):
+    """Body of POST /api/documents/{id}/extract, e.g. {"fields": ["invoice date", "total amount"]}."""
+    fields: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]] = Field(
+        min_length=1, max_length=20
+    )
+
+
+class ExtractedFieldOut(BaseModel):
+    field: str
+    value: str | None  # null when the document doesn't contain it
+    page: int | None
+
+
+class ExtractOut(BaseModel):
+    """Response of POST /api/documents/{id}/extract: one row per requested field."""
+    document_id: int
+    results: list[ExtractedFieldOut]
+    note: str | None = None  # e.g. when only part of a very long document was read

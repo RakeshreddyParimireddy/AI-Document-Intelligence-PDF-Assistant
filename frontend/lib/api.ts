@@ -50,6 +50,25 @@ export type Message = {
   created_at: string;
 };
 
+export type SummaryInfo = {
+  document_id: number;
+  summary: string;
+  key_points: string[];
+  created_at: string;
+};
+
+export type ExtractedField = {
+  field: string;
+  value: string | null; // null = not found in the document
+  page: number | null;
+};
+
+export type ExtractResult = {
+  document_id: number;
+  results: ExtractedField[];
+  note: string | null; // e.g. only part of a very long document was read
+};
+
 // Must match MAX_UPLOAD_MB on the backend (the backend checks too)
 export const MAX_UPLOAD_MB = 20;
 
@@ -173,6 +192,30 @@ export function askQuestion(chatId: number, question: string): Promise<Message> 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
+  });
+}
+
+// ---------- Insights: summary + extraction ----------
+// The saved summary, or null if none has been made yet (free, no AI call)
+export async function getSummary(documentId: number): Promise<SummaryInfo | null> {
+  try {
+    return await request<SummaryInfo>(`/api/documents/${documentId}/summary`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+// Makes a new summary with the AI (replaces the old one)
+export function summarizeDocument(documentId: number): Promise<SummaryInfo> {
+  return request<SummaryInfo>(`/api/documents/${documentId}/summarize`, { method: "POST" });
+}
+
+export function extractFields(documentId: number, fields: string[]): Promise<ExtractResult> {
+  return request<ExtractResult>(`/api/documents/${documentId}/extract`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields }),
   });
 }
 
