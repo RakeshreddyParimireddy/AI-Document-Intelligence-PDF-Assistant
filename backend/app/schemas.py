@@ -45,3 +45,22 @@ class DocumentOut(BaseModel):
     size_kb: int
     status: str
     uploaded_at: datetime
+
+
+# ---------- Search (retrieval) ----------
+class SearchRequest(BaseModel):
+    """Body of POST /api/documents/search."""
+    question: str = Field(min_length=1, max_length=1000)
+    # Leave empty to search all your ready documents
+    document_ids: list[int] | None = None
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class SearchResult(BaseModel):
+    """One matching chunk. `score` is similarity: higher = more relevant (max 1.0)."""
+    chunk_id: int
+    document_id: int
+    document: str  # filename
+    page: int
+    content: str
+    score: float

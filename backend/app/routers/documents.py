@@ -11,10 +11,11 @@ from app.auth import get_current_user
 from app.config import get_settings
 from app.database import SessionLocal, get_db
 from app.models import Chunk, Document, DocumentStatus, User
-from app.schemas import DocumentOut
+from app.schemas import DocumentOut, SearchRequest, SearchResult
 from app.services.chunker import chunk_pages
 from app.services.embeddings import embed_texts
 from app.services.pdf_reader import extract_pages
+from app.services.retriever import search_chunks
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -144,6 +145,41 @@ def list_documents(current_user: User = Depends(get_current_user), db: Session =
         .where(Document.user_id == current_user.id)
         .order_by(Document.uploaded_at.desc())
     ).all()
+
+
+@router.post("/search", response_model=list[SearchResult])
+def search_documents(
+    body: SearchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Find the chunks most relevant to a question (no AI answer yet, just the matches)."""
+    if body.document_ids:
+        # Every requested document must exist and belong to this user
+        owned_ids = set(
+            db.scalars(
+                select(Document.id).where(
+                    Document.id.in_(body.document_ids), Document.user_id == current_user.id
+                )
+            )
+        )
+        if owned_ids != set(body.document_ids):
+            raise HTTPException(status_code=404, detail="Document not found")
+
+    results = search_chunks(
+        db, current_user.id, body.question, body.document_ids, body.top_k
+    )
+    return [
+        SearchResult(
+            chunk_id=r.chunk_id,
+            document_id=r.document_id,
+            document=r.filename,
+            page=r.page_number,
+            content=r.content,
+            score=r.score,
+        )
+        for r in results
+    ]
 
 
 @router.get("/{document_id}", response_model=DocumentOut)
