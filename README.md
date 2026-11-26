@@ -1,5 +1,7 @@
 # DocuMind — AI Document Intelligence & PDF Assistant
 
+[![CI](https://github.com/RakeshreddyParimireddy/AI-Document-Intelligence-PDF-Assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/RakeshreddyParimireddy/AI-Document-Intelligence-PDF-Assistant/actions/workflows/ci.yml)
+
 Upload PDFs, ask questions with page citations, summarize and extract data. See `PLAN.md`.
 
 ## Run it
@@ -39,3 +41,10 @@ and a fake LLM, so **no API key is needed and nothing costs money**.
 docker compose up --build -d
 docker compose exec backend pytest -v
 ```
+
+## Continuous integration (CI)
+On every push, GitHub Actions (`.github/workflows/ci.yml`) automatically:
+- runs all backend tests against a fresh PostgreSQL + pgvector database
+- lints, builds and type-checks the frontend
+
+See the results in the repository's **Actions** tab. The badge at the top of this file turns red if something breaks.

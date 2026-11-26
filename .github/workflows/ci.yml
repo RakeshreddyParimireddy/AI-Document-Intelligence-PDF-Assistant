@@ -1,0 +1,103 @@
+# CI: on every push (and pull request), GitHub runs our checks on a fresh computer.
+# A red ❌ on GitHub means something is broken; a green ✅ means all checks passed.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Only read access to the code - the workflow can't change anything in the repo
+permissions:
+  contents: read
+
+# If you push again while a run is still going, cancel the old run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # A throwaway PostgreSQL + pgvector database just for this run
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: documind
+          POSTGRES_PASSWORD: documind
+          POSTGRES_DB: documind
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U documind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Test-only settings. These are NOT real secrets: the database is deleted after the run,
+    # and the LLM is faked in the tests, so no API key is needed.
+    env:
+      DATABASE_URL: postgresql+psycopg://documind:documind@localhost:5432/documind
+      JWT_SECRET: ci-only-test-secret
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install packages
+        run: |
+          # CPU-only PyTorch: much smaller and faster to install than the GPU version
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # Keep the downloaded embedding model between runs, so it isn't downloaded every time
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-all-MiniLM-L6-v2
+
+      - name: Run tests
+        run: pytest -v
+
+  frontend-checks:
+    name: Frontend lint + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # After the build, so Next.js has generated its route types
+      - name: Type check
+        run: npx tsc --noEmit
