@@ -38,6 +38,19 @@ class Document(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class DocumentPage(Base):
+    """The full text of one page. Summary and Extract read this, so the PDF file
+    doesn't have to be kept on disk (free hosting deletes files on restart)."""
+    __tablename__ = "pages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    page_number: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+
+
 class Chunk(Base):
     """A small piece of a document's text, plus its embedding vector."""
     __tablename__ = "chunks"

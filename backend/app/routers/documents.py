@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.config import get_settings
 from app.database import SessionLocal, get_db
-from app.models import Chunk, Document, DocumentStatus, User
+from app.models import DocumentPage, Chunk, Document, DocumentStatus, User
 from app.schemas import DocumentOut, SearchRequest, SearchResult
 from app.services.chunker import chunk_pages
 from app.services.embeddings import embed_texts
@@ -46,17 +46,25 @@ def process_document(document_id: int) -> None:
     """Runs in the background after upload: read -> chunk -> embed -> store.
 
     It opens its own database session, because the request's session
-    is already closed by the time this runs.
+    is already closed by the time this runs. Afterwards the PDF file is deleted:
+    everything we need (page text, chunks, vectors) is in the database.
     """
     db = SessionLocal()
+    path = None
     try:
         document = db.get(Document, document_id)
         if document is None:  # deleted before processing started
             return
+        path = pdf_path(document)
         try:
-            # 1. Read the text of each page
-            pages = extract_pages(str(pdf_path(document)))
+            # 1. Read the text of each page, and keep it (for Summary and Extract)
+            pages = extract_pages(str(path))
             document.pages = len(pages)
+            db.add_all(
+                DocumentPage(document_id=document.id, page_number=page.page_number, text=page.text)
+                for page in pages
+                if page.text
+            )
 
             # 2. Split into chunks (each remembers its page number)
             chunks = chunk_pages(pages)
@@ -87,6 +95,8 @@ def process_document(document_id: int) -> None:
                 db.commit()
     finally:
         db.close()
+        if path is not None:
+            path.unlink(missing_ok=True)
 
 
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_202_ACCEPTED)
@@ -128,7 +138,7 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
-    # 5. Save the PDF to disk
+    # 5. Save the PDF to disk (only until it has been processed)
     path = pdf_path(document)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)

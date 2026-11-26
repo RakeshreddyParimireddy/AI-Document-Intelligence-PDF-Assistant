@@ -1,7 +1,8 @@
 // All calls to the backend go through this file.
 // Types here mirror backend/app/schemas.py.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Remove a trailing "/" so "https://x.hf.space/" works too
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 const TOKEN_KEY = "documind_token";
 
 // ---------- Types ----------

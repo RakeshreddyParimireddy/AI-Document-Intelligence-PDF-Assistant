@@ -5,6 +5,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch: # adds a "Run workflow" button in the Actions tab
 
 # Only read access to the code - the workflow can't change anything in the repo
 permissions:
@@ -101,3 +102,41 @@ jobs:
       # After the build, so Next.js has generated its route types
       - name: Type check
         run: npx tsc --noEmit
+
+  # CD: after all checks pass on main, upload the backend to your Hugging Face Space,
+  # which then rebuilds and restarts it. (The frontend is deployed by Vercel itself.)
+  # Skipped until you add the HF_SPACE variable and HF_TOKEN secret (see DEPLOY.md).
+  deploy-backend:
+    name: Deploy backend to Hugging Face
+    needs: [backend-tests, frontend-checks]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.HF_SPACE != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Upload backend to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          pip install huggingface_hub
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          HfApi(token=os.environ["HF_TOKEN"]).upload_folder(
+              repo_id=os.environ["HF_SPACE"],
+              repo_type="space",
+              folder_path="backend",
+              ignore_patterns=["tests/**", "**/__pycache__/**", ".pytest_cache/**"],
+              delete_patterns="*",  # remove files that no longer exist in backend/
+              commit_message=f"Deploy {os.environ['GITHUB_SHA'][:7]}",
+          )
+          print("Uploaded. The Space is rebuilding now.")
+          PY

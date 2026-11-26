@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Chunk
+from app.models import Chunk, DocumentPage
 from tests.conftest import INVOICE_PAGES, make_pdf
 
 
@@ -83,13 +83,36 @@ def test_users_only_see_their_own_documents(client, make_user, upload):
     assert client.get(f"/api/documents/{doc_id}", headers=alice).status_code == 200
 
 
-def test_delete_removes_document_file_and_chunks(client, make_user, upload):
+def saved_pages(document_id: int) -> list[tuple[int, str]]:
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(DocumentPage.page_number, DocumentPage.text)
+            .where(DocumentPage.document_id == document_id)
+            .order_by(DocumentPage.page_number)
+        )
+        return [tuple(row) for row in rows]
+
+
+def test_page_text_is_saved_and_the_pdf_file_is_deleted(client, make_user, upload):
     headers = make_user()
     doc_id = upload(headers, INVOICE_PAGES).json()["id"]
-    pdf_files = list(Path(get_settings().upload_dir).rglob("*.pdf"))
-    assert len(pdf_files) == 1
+    pages = saved_pages(doc_id)
+    assert [number for number, _ in pages] == [1, 2, 3]
+    assert "$14,850.00" in pages[0][1]
+    # Everything needed is in the database, so the file isn't kept
+    assert list(Path(get_settings().upload_dir).rglob("*.pdf")) == []
 
+
+def test_pdf_file_is_deleted_even_when_processing_fails(client, make_user, upload):
+    headers = make_user()
+    upload(headers, [""], "scanned.pdf")
+    assert list(Path(get_settings().upload_dir).rglob("*.pdf")) == []
+
+
+def test_delete_removes_document_chunks_and_pages(client, make_user, upload):
+    headers = make_user()
+    doc_id = upload(headers, INVOICE_PAGES).json()["id"]
     assert client.delete(f"/api/documents/{doc_id}", headers=headers).status_code == 204
     assert client.get(f"/api/documents/{doc_id}", headers=headers).status_code == 404
     assert chunk_count(doc_id) == 0
-    assert not pdf_files[0].exists()
+    assert saved_pages(doc_id) == []

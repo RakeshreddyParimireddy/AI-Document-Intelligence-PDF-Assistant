@@ -48,3 +48,6 @@ On every push, GitHub Actions (`.github/workflows/ci.yml`) automatically:
 - lints, builds and type-checks the frontend
 
 See the results in the repository's **Actions** tab. The badge at the top of this file turns red if something breaks.
+
+## Deploy
+Free deployment (Vercel + Hugging Face Spaces + Neon), step by step: see [DEPLOY.md](DEPLOY.md).

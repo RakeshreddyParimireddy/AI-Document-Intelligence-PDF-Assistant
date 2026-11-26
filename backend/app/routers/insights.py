@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Chat, Document, DocumentStatus, Message, Summary, User
+from app.models import Chat, Document, DocumentPage, DocumentStatus, Message, Summary, User
 from app.routers.documents import get_own_document, pdf_path
 from app.schemas import DashboardStats, ExtractOut, ExtractRequest, ExtractedFieldOut, SummaryOut
 from app.services import llm
@@ -21,9 +21,27 @@ def get_ready_document(document_id: int, user: User, db: Session) -> Document:
     return document
 
 
-def read_document_text(document: Document) -> tuple[str, str | None]:
+def load_pages(document: Document, db: Session) -> list[tuple[int, str]]:
+    """The (page number, text) of every page that has text."""
+    rows = db.execute(
+        select(DocumentPage.page_number, DocumentPage.text)
+        .where(DocumentPage.document_id == document.id)
+        .order_by(DocumentPage.page_number)
+    ).all()
+    if rows:
+        return [(number, text) for number, text in rows]
+    # Documents uploaded before page text was saved: read the PDF file, if it's still there
+    path = pdf_path(document)
+    if path.exists():
+        return [(p.page_number, p.text) for p in extract_pages(str(path)) if p.text]
+    raise HTTPException(
+        status_code=409, detail="This document's text is missing. Please upload it again."
+    )
+
+
+def read_document_text(document: Document, db: Session) -> tuple[str, str | None]:
     """Return the document text (with page markers) and a note if it had to be shortened."""
-    pages = [(p.page_number, p.text) for p in extract_pages(str(pdf_path(document))) if p.text]
+    pages = load_pages(document, db)
     text, pages_used = llm.format_document(pages)
     note = None
     if pages_used < len(pages):
@@ -69,7 +87,7 @@ def summarize(
 ):
     """Make a new summary + key points with the AI (replaces any previous one)."""
     document = get_ready_document(document_id, current_user, db)
-    text, note = read_document_text(document)
+    text, note = read_document_text(document, db)
     result = run_llm(lambda: llm.summarize_document(document.filename, text))
 
     summary_text = f"{result.summary}\n\n({note})" if note else result.summary
@@ -102,7 +120,7 @@ def extract(
         if field.lower() not in seen:
             seen.add(field.lower())
             fields.append(field)
-    text, note = read_document_text(document)
+    text, note = read_document_text(document, db)
     results = run_llm(lambda: llm.extract_fields(document.filename, text, fields, document.pages))
     return ExtractOut(
         document_id=document.id,

@@ -16,7 +16,9 @@ from app.services.embeddings import get_model
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create any missing tables when the app starts
+    # Turn on pgvector (needed on a brand-new hosted database), then create missing tables
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
     # Load the embedding model now, so the first upload/question isn't slow
     get_model()
@@ -28,7 +30,8 @@ app = FastAPI(title="DocuMind API", lifespan=lifespan)
 # Allow the frontend (a different address, e.g. http://localhost:3000) to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in get_settings().cors_origins.split(",") if o.strip()],
+    # (a trailing "/" is removed: browsers send "https://x.vercel.app", never "https://x.vercel.app/")
+    allow_origins=[o.strip().rstrip("/") for o in get_settings().cors_origins.split(",") if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
