@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     llm_model: str = "claude-opus-5-5"
     upload_dir: str = "uploads"  # folder where uploaded PDFs are saved
     max_upload_mb: int = 20
+    # Website addresses allowed to call this API from a browser (comma-separated)
+    cors_origins: str = "http://localhost:3000"
 
 
 @lru_cache

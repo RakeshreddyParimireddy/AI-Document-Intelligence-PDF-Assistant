@@ -2,8 +2,10 @@
 
 Upload PDFs, ask questions with page citations, summarize and extract data. See `PLAN.md`.
 
-## Run it (Milestone 1)
-Requires Docker Desktop.
+## Run it
+Requires Docker Desktop and Node.js.
+
+**1. Backend + database** (from the project folder):
 
 ```powershell
 Copy-Item .env.example .env      # then edit the values in .env
@@ -15,4 +17,15 @@ docker compose up --build -d
 
 If port 8000 is already in use, set `BACKEND_PORT=8001` in `.env` and use 8001 in the URLs.
 
-Stop with `docker compose down` (add `-v` to also delete the database data).
+**2. Frontend** (in a second terminal):
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local   # set NEXT_PUBLIC_API_URL to the backend address
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+Stop the backend with `docker compose down` (add `-v` to also delete the database data).
