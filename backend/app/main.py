@@ -1,12 +1,25 @@
 """FastAPI entry point."""
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.database import engine
+from app import models  # noqa: F401  (imported so its tables are registered on Base)
+from app.database import Base, engine
+from app.routers import auth
 
-app = FastAPI(title="DocuMind API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create any missing tables when the app starts
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="DocuMind API", lifespan=lifespan)
+app.include_router(auth.router)
 
 
 @app.get("/api/health")

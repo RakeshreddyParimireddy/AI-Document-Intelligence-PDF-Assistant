@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     database_url: str = "postgresql+psycopg://documind:change-me@localhost:5433/documind"
-    jwt_secret: str = "change-me"
+    jwt_secret: str  # required: the app will not start without it
+    jwt_expire_minutes: int = 60
     llm_api_key: str = ""
 
 
