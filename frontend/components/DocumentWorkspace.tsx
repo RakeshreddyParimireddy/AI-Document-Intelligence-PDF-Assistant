@@ -3,16 +3,17 @@
 // One document's workspace with three tabs: Chat | Summary | Extract.
 // On the Chat tab, the source panel on the right shows where an answer came from.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
+import ChatHistoryPicker from "@/components/ChatHistoryPicker";
 import ChatWindow from "@/components/ChatWindow";
-import type { SourceGroup } from "@/components/CitationChip";
 import { useDocuments } from "@/components/DocumentsProvider";
 import ExtractTable from "@/components/ExtractTable";
 import SourcePanel from "@/components/SourcePanel";
 import StatusBadge from "@/components/StatusBadge";
 import SummaryCard from "@/components/SummaryCard";
-import { askQuestion, createChat, listChats, listMessages, type Chat, type Message } from "@/lib/api";
+import type { Chat } from "@/lib/api";
+import { useChatSession } from "@/lib/useChatSession";
 
 const TABS = [
   { id: "chat", label: "Chat" },
@@ -21,109 +22,17 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
-function errorText(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback;
-}
-
 export default function DocumentWorkspace({ documentId }: { documentId: number }) {
   const { documents, loading: documentsLoading } = useDocuments();
   const doc = documents.find((d) => d.id === documentId);
-
   const [tab, setTab] = useState<Tab>("chat");
-  const [chats, setChats] = useState<Chat[]>([]); // this document's chats, newest first
-  const [chatId, setChatId] = useState<number | null>(null); // null = new, unsaved chat
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [thinking, setThinking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [activeSource, setActiveSource] = useState<{ key: string; source: SourceGroup } | null>(null);
-  // Chat we just created while asking: its messages are already on screen, don't reload them
-  const justCreatedChatId = useRef<number | null>(null);
 
-  // Chats that are about this one document (multi-document chats live elsewhere)
-  const onlyThisDocument = useCallback(
-    (all: Chat[]) =>
-      all.filter((c) => c.document_ids.length === 1 && c.document_ids[0] === documentId),
+  // Only chats about this one document (multi-document chats live on /chats)
+  const belongsHere = useCallback(
+    (chat: Chat) => chat.document_ids.length === 1 && chat.document_ids[0] === documentId,
     [documentId],
   );
-
-  // Load chat history; open the newest chat if nothing is selected yet
-  useEffect(() => {
-    let cancelled = false;
-    listChats()
-      .then((all) => {
-        if (cancelled) return;
-        const mine = onlyThisDocument(all);
-        setChats(mine);
-        if (mine.length > 0) setChatId((current) => current ?? mine[0].id);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(errorText(err, "Could not load chats"));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [onlyThisDocument]);
-
-  // Load the messages of the selected chat
-  useEffect(() => {
-    if (chatId === null || chatId === justCreatedChatId.current) return;
-    let cancelled = false;
-    listMessages(chatId)
-      .then((list) => {
-        if (!cancelled) setMessages(list);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(errorText(err, "Could not load messages"));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId]);
-
-  function openChat(id: number | null) {
-    justCreatedChatId.current = null;
-    setChatId(id);
-    setMessages([]);
-    setActiveSource(null);
-    setError(null);
-  }
-
-  async function handleAsk(question: string): Promise<boolean> {
-    setError(null);
-    setThinking(true);
-    // Show the question immediately (temporary negative id until the page reloads history)
-    const pending: Message = {
-      id: -Date.now(),
-      role: "user",
-      content: question,
-      citations: [],
-      created_at: new Date().toISOString(),
-    };
-    setMessages((current) => [...current, pending]);
-
-    try {
-      let id = chatId;
-      if (id === null) {
-        // First question: create the chat now
-        id = (await createChat([documentId])).id;
-        justCreatedChatId.current = id;
-        setChatId(id);
-      }
-      const answer = await askQuestion(id, question);
-      setMessages((current) => [...current, answer]);
-      // Refresh the history list (a new chat gets its title from the first question)
-      listChats()
-        .then((all) => setChats(onlyThisDocument(all)))
-        .catch(() => {});
-      return true;
-    } catch (err) {
-      setMessages((current) => current.filter((m) => m.id !== pending.id));
-      setError(errorText(err, "Could not get an answer"));
-      return false;
-    } finally {
-      setThinking(false);
-    }
-  }
+  const session = useChatSession({ belongsHere, documentIdsForNewChat: [documentId] });
 
   if (!doc) {
     return documentsLoading ? (
@@ -169,33 +78,12 @@ export default function DocumentWorkspace({ documentId }: { documentId: number }
             </div>
 
             {tab === "chat" && (
-              <>
-                <label className="sr-only" htmlFor="chat-history">
-                  Chat history
-                </label>
-                <select
-                  id="chat-history"
-                  value={chatId ?? ""}
-                  onChange={(e) => openChat(e.target.value ? Number(e.target.value) : null)}
-                  disabled={thinking}
-                  className="max-w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-                >
-                  {chatId === null && <option value="">New chat</option>}
-                  {chats.map((chat) => (
-                    <option key={chat.id} value={chat.id}>
-                      {chat.title}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => openChat(null)}
-                  disabled={chatId === null || thinking}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  + New chat
-                </button>
-              </>
+              <ChatHistoryPicker
+                chats={session.chats}
+                chatId={session.chatId}
+                busy={session.thinking}
+                onOpen={session.openChat}
+              />
             )}
           </div>
 
@@ -222,13 +110,13 @@ export default function DocumentWorkspace({ documentId }: { documentId: number }
         {/* All tabs stay mounted (just hidden), so switching tabs keeps their content */}
         <div className={tab === "chat" ? "flex min-h-0 flex-1" : "hidden"}>
           <ChatWindow
-            messages={messages}
-            thinking={thinking}
+            messages={session.messages}
+            thinking={session.thinking}
             disabledReason={disabledReason}
-            error={error}
-            onAsk={handleAsk}
-            activeSourceKey={activeSource?.key ?? null}
-            onSelectSource={(key, source) => setActiveSource({ key, source })}
+            error={session.error}
+            onAsk={session.ask}
+            activeSourceKey={session.activeSource?.key ?? null}
+            onSelectSource={(key, source) => session.setActiveSource({ key, source })}
           />
         </div>
         <div className={tab === "summary" ? "flex-1 overflow-y-auto" : "hidden"}>
@@ -244,7 +132,10 @@ export default function DocumentWorkspace({ documentId }: { documentId: number }
       </div>
 
       {tab === "chat" && (
-        <SourcePanel source={activeSource?.source ?? null} onClose={() => setActiveSource(null)} />
+        <SourcePanel
+          source={session.activeSource?.source ?? null}
+          onClose={() => session.setActiveSource(null)}
+        />
       )}
     </div>
   );

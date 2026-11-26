@@ -6,7 +6,10 @@ import { useAuth } from "@/components/AuthProvider";
 import { useDocuments } from "@/components/DocumentsProvider";
 import type { DocumentStatus } from "@/lib/api";
 
-const NAV_ITEMS = [{ href: "/", label: "Dashboard", icon: "▦" }];
+const NAV_ITEMS = [
+  { href: "/", label: "Dashboard", icon: "▦" },
+  { href: "/chats", label: "Multi-doc chat", icon: "⧉" },
+];
 
 const STATUS_DOT: Record<DocumentStatus, string> = {
   processing: "bg-amber-400 animate-pulse",

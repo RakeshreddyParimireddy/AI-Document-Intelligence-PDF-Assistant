@@ -29,6 +29,7 @@ function sourceKey(messageId: number, source: SourceGroup) {
 }
 
 type Props = {
+  emptyTitle?: string; // shown before the first message
   messages: Message[];
   thinking: boolean; // waiting for an answer
   disabledReason: string | null; // why asking is not possible right now
@@ -39,6 +40,7 @@ type Props = {
 };
 
 export default function ChatWindow({
+  emptyTitle = "Ask anything about this document",
   messages,
   thinking,
   disabledReason,
@@ -69,9 +71,9 @@ export default function ChatWindow({
       <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
         {messages.length === 0 && !thinking && (
           <div className="mx-auto mt-16 max-w-md text-center">
-            <p className="text-lg font-medium text-slate-800">Ask anything about this document</p>
+            <p className="text-lg font-medium text-slate-800">{emptyTitle}</p>
             <p className="mt-1 text-sm text-slate-500">
-              Answers come only from the document, with the pages they came from.
+              Answers come only from your documents, with the pages they came from.
             </p>
           </div>
         )}

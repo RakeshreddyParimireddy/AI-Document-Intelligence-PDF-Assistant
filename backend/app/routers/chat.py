@@ -14,6 +14,8 @@ router = APIRouter(prefix="/api/chats", tags=["chat"])
 
 DEFAULT_TITLE = "New chat"
 SNIPPET_CHARS = 300  # how much of a chunk to show in a citation
+TOP_K_SINGLE = 5  # chunks sent to the LLM for a one-document chat
+TOP_K_MULTI = 8  # ...and for a multi-document chat
 
 
 def get_own_chat(chat_id: int, user: User, db: Session) -> Chat:
@@ -95,9 +97,13 @@ def ask(
     chat = get_own_chat(chat_id, current_user, db)
     question = body.question.strip()
 
-    # 1. Retrieve: the 5 chunks closest in meaning to the question
+    # 1. Retrieve: the chunks closest in meaning to the question.
+    #    Across several documents we take a few more, so one document can't fill every slot.
     document_ids = chat_document_ids(chat, db)
-    chunks = search_chunks(db, current_user.id, question, document_ids) if document_ids else []
+    top_k = TOP_K_SINGLE if len(document_ids) <= 1 else TOP_K_MULTI
+    chunks = (
+        search_chunks(db, current_user.id, question, document_ids, top_k) if document_ids else []
+    )
 
     # 2. Generate: let the LLM answer using only those chunks
     if not chunks:
