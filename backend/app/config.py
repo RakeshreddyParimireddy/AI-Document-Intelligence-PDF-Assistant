@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     jwt_secret: str  # required: the app will not start without it
     jwt_expire_minutes: int = 60
     llm_api_key: str = ""
+    llm_model: str = "claude-opus-5-5"
     upload_dir: str = "uploads"  # folder where uploaded PDFs are saved
     max_upload_mb: int = 20
 

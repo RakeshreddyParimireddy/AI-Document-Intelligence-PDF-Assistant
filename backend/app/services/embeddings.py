@@ -3,18 +3,28 @@
 Uses a small free model that runs on the CPU, no API key needed.
 Texts with similar meaning get vectors that point in a similar direction.
 """
-from functools import lru_cache
+import threading
 
 from sentence_transformers import SentenceTransformer
 
 MODEL_NAME = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384  # length of each vector this model produces (must match the chunks table)
 
+_model: SentenceTransformer | None = None
+_model_lock = threading.Lock()
 
-@lru_cache
+
 def get_model() -> SentenceTransformer:
-    # Loaded once, on first use, then reused (loading takes a few seconds)
-    return SentenceTransformer(MODEL_NAME, device="cpu")
+    """Load the model once, then reuse it (loading takes a few seconds).
+
+    The lock matters: if two requests load the model at the same moment
+    (e.g. two uploads right after startup), the loading crashes.
+    """
+    global _model
+    with _model_lock:
+        if _model is None:
+            _model = SentenceTransformer(MODEL_NAME, device="cpu")
+    return _model
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:

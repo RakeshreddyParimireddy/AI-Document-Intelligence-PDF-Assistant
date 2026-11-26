@@ -64,3 +64,41 @@ class SearchResult(BaseModel):
     page: int
     content: str
     score: float
+
+
+# ---------- Chat (RAG answers) ----------
+class ChatCreate(BaseModel):
+    """Body of POST /api/chats."""
+    document_ids: list[int] = Field(min_length=1)
+    title: str | None = Field(default=None, max_length=255)
+
+
+class ChatOut(BaseModel):
+    id: int
+    title: str
+    created_at: datetime
+    document_ids: list[int]
+
+
+class AskRequest(BaseModel):
+    """Body of POST /api/chats/{id}/ask."""
+    question: str = Field(min_length=1, max_length=1000)
+
+
+class Citation(BaseModel):
+    """Where part of an answer came from."""
+    document_id: int
+    document: str  # filename
+    page: int
+    snippet: str  # start of the chunk text used
+
+
+class MessageOut(BaseModel):
+    """A chat message. Assistant messages include `citations`."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    role: str
+    content: str
+    citations: list[Citation]
+    created_at: datetime
