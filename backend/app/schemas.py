@@ -28,3 +28,20 @@ class Token(BaseModel):
     """
     access_token: str
     token_type: str = "bearer"
+
+
+# ---------- Documents ----------
+class DocumentOut(BaseModel):
+    """A document as returned by the API.
+
+    Upload is POST /api/documents/upload with multipart form field `file`.
+    `status` is "processing" right after upload, then "ready" or "failed".
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    filename: str
+    pages: int
+    size_kb: int
+    status: str
+    uploaded_at: datetime

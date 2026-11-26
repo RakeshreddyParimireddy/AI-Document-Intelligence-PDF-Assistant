@@ -26,9 +26,12 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     ports:
       - "${BACKEND_PORT:-8000}:8000" # change BACKEND_PORT in .env if 8000 is busy
+    volumes:
+      - uploads:/app/uploads # keeps uploaded PDFs when the container is rebuilt
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:

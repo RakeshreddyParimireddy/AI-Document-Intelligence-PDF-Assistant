@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import models  # noqa: F401  (imported so its tables are registered on Base)
 from app.database import Base, engine
-from app.routers import auth
+from app.routers import auth, documents
 
 
 @asynccontextmanager
@@ -20,6 +20,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DocuMind API", lifespan=lifespan)
 app.include_router(auth.router)
+app.include_router(documents.router)
 
 
 @app.get("/api/health")
