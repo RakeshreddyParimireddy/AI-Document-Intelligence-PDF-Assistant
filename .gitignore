@@ -1,0 +1,23 @@
+# Secrets - never commit these
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+
+# Uploaded files
+uploads/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
