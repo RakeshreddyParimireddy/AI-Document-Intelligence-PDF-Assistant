@@ -29,3 +29,13 @@ npm run dev
 Open http://localhost:3000
 
 Stop the backend with `docker compose down` (add `-v` to also delete the database data).
+
+## Run the tests
+The backend has pytest tests for auth, upload, the chunker, retrieval and chat.
+They use a separate `documind_test` database (your real data is never touched)
+and a fake LLM, so **no API key is needed and nothing costs money**.
+
+```powershell
+docker compose up --build -d
+docker compose exec backend pytest -v
+```

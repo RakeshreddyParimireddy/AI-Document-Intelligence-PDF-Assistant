@@ -28,6 +28,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000" # change BACKEND_PORT in .env if 8000 is busy
     volumes:
       - uploads:/app/uploads # keeps uploaded PDFs when the container is rebuilt
+      - ./backend/tests:/app/tests:ro # so `docker compose exec backend pytest` sees the latest tests
     depends_on:
       db:
         condition: service_healthy
