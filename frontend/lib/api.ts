@@ -28,6 +28,28 @@ export type DashboardStats = {
   questions_asked: number;
 };
 
+export type Chat = {
+  id: number;
+  title: string;
+  created_at: string;
+  document_ids: number[];
+};
+
+export type Citation = {
+  document_id: number;
+  document: string; // filename
+  page: number;
+  snippet: string;
+};
+
+export type Message = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[];
+  created_at: string;
+};
+
 // Must match MAX_UPLOAD_MB on the backend (the backend checks too)
 export const MAX_UPLOAD_MB = 20;
 
@@ -126,6 +148,32 @@ export function uploadDocument(file: File): Promise<DocumentInfo> {
 
 export function deleteDocument(id: number): Promise<void> {
   return request<void>(`/api/documents/${id}`, { method: "DELETE" });
+}
+
+// ---------- Chat ----------
+export function listChats(): Promise<Chat[]> {
+  return request<Chat[]>("/api/chats");
+}
+
+export function createChat(documentIds: number[]): Promise<Chat> {
+  return request<Chat>("/api/chats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ document_ids: documentIds }),
+  });
+}
+
+export function listMessages(chatId: number): Promise<Message[]> {
+  return request<Message[]>(`/api/chats/${chatId}/messages`);
+}
+
+// Returns the assistant's answer (the question is saved by the backend too)
+export function askQuestion(chatId: number, question: string): Promise<Message> {
+  return request<Message>(`/api/chats/${chatId}/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
 }
 
 // ---------- Dashboard ----------

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useDocuments } from "@/components/DocumentsProvider";
 import StatusBadge from "@/components/StatusBadge";
 import type { DocumentInfo } from "@/lib/api";
@@ -59,8 +60,10 @@ export default function DocumentList() {
         <tbody className="divide-y divide-slate-100">
           {documents.map((doc) => (
             <tr key={doc.id} className="hover:bg-slate-50">
-              <td className="max-w-xs truncate px-4 py-3 font-medium text-slate-800" title={doc.filename}>
-                {doc.filename}
+              <td className="max-w-xs truncate px-4 py-3 font-medium" title={doc.filename}>
+                <Link href={`/documents/${doc.id}`} className="text-slate-800 hover:text-indigo-600 hover:underline">
+                  {doc.filename}
+                </Link>
               </td>
               <td className="px-4 py-3">
                 <StatusBadge status={doc.status} />

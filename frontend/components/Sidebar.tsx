@@ -57,19 +57,27 @@ export default function Sidebar() {
           <p className="px-3 py-2 text-sm text-slate-400">No documents yet</p>
         ) : (
           <ul className="mt-1 space-y-0.5">
-            {documents.map((doc) => (
-              <li
-                key={doc.id}
-                title={doc.filename}
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-slate-600"
-              >
-                <span
-                  aria-label={doc.status}
-                  className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[doc.status]}`}
-                />
-                <span className="truncate">{doc.filename}</span>
-              </li>
-            ))}
+            {documents.map((doc) => {
+              const href = `/documents/${doc.id}`;
+              const active = pathname === href;
+              return (
+                <li key={doc.id}>
+                  <Link
+                    href={href}
+                    title={doc.filename}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
+                      active ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span
+                      aria-label={doc.status}
+                      className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[doc.status]}`}
+                    />
+                    <span className="truncate">{doc.filename}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
