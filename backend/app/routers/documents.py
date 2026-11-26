@@ -1,4 +1,5 @@
 """Document routes: upload a PDF, list, view, and delete your documents."""
+import logging
 import os
 from pathlib import Path
 
@@ -9,10 +10,13 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.config import get_settings
 from app.database import SessionLocal, get_db
-from app.models import Document, DocumentStatus, User
+from app.models import Chunk, Document, DocumentStatus, User
 from app.schemas import DocumentOut
+from app.services.chunker import chunk_pages
+from app.services.embeddings import embed_texts
 from app.services.pdf_reader import extract_pages
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 READ_CHUNK_BYTES = 1024 * 1024  # read uploads 1 MB at a time
@@ -38,7 +42,7 @@ def get_own_document(document_id: int, user: User, db: Session) -> Document:
 
 
 def process_document(document_id: int) -> None:
-    """Runs in the background after upload: read the PDF text page by page.
+    """Runs in the background after upload: read -> chunk -> embed -> store.
 
     It opens its own database session, because the request's session
     is already closed by the time this runs.
@@ -49,15 +53,37 @@ def process_document(document_id: int) -> None:
         if document is None:  # deleted before processing started
             return
         try:
+            # 1. Read the text of each page
             pages = extract_pages(str(pdf_path(document)))
             document.pages = len(pages)
+
+            # 2. Split into chunks (each remembers its page number)
+            chunks = chunk_pages(pages)
+
             # A scanned PDF (only images) has no text we can use
-            has_text = any(page.text for page in pages)
-            document.status = DocumentStatus.READY if has_text else DocumentStatus.FAILED
-            # Milestone 4 will chunk and embed `pages` here.
+            if not chunks:
+                document.status = DocumentStatus.FAILED
+            else:
+                # 3. Turn every chunk into a vector, 4. save chunks + vectors
+                vectors = embed_texts([chunk.content for chunk in chunks])
+                db.add_all(
+                    Chunk(
+                        document_id=document.id,
+                        page_number=chunk.page_number,
+                        content=chunk.content,
+                        embedding=vector,
+                    )
+                    for chunk, vector in zip(chunks, vectors)
+                )
+                document.status = DocumentStatus.READY
+            db.commit()
         except Exception:
-            document.status = DocumentStatus.FAILED
-        db.commit()
+            logger.exception("Processing failed for document %s", document_id)
+            db.rollback()  # throw away any half-saved chunks
+            document = db.get(Document, document_id)
+            if document is not None:
+                document.status = DocumentStatus.FAILED
+                db.commit()
     finally:
         db.close()
 
@@ -137,5 +163,5 @@ def delete_document(
 ):
     document = get_own_document(document_id, current_user, db)
     pdf_path(document).unlink(missing_ok=True)
-    db.delete(document)
+    db.delete(document)  # the database also deletes its chunks (ON DELETE CASCADE)
     db.commit()
