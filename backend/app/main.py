@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import models  # noqa: F401  (imported so its tables are registered on Base)
 from app.config import get_settings
 from app.database import Base, engine
-from app.routers import auth, chat, documents
+from app.routers import auth, chat, documents, insights
 from app.services.embeddings import get_model
 
 
@@ -36,6 +36,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(insights.router)
 
 
 @app.get("/api/health")

@@ -11,6 +11,26 @@ export type User = {
   created_at: string;
 };
 
+export type DocumentStatus = "processing" | "ready" | "failed";
+
+export type DocumentInfo = {
+  id: number;
+  filename: string;
+  pages: number;
+  size_kb: number;
+  status: DocumentStatus;
+  uploaded_at: string;
+};
+
+export type DashboardStats = {
+  documents: number;
+  pages_processed: number;
+  questions_asked: number;
+};
+
+// Must match MAX_UPLOAD_MB on the backend (the backend checks too)
+export const MAX_UPLOAD_MB = 20;
+
 // ---------- Errors ----------
 export class ApiError extends Error {
   constructor(
@@ -90,4 +110,25 @@ export async function login(email: string, password: string): Promise<void> {
 
 export function getMe(): Promise<User> {
   return request<User>("/api/auth/me");
+}
+
+// ---------- Documents ----------
+export function listDocuments(): Promise<DocumentInfo[]> {
+  return request<DocumentInfo[]>("/api/documents");
+}
+
+export function uploadDocument(file: File): Promise<DocumentInfo> {
+  const form = new FormData();
+  form.append("file", file);
+  // No Content-Type header: the browser sets it (with the file boundary) for FormData
+  return request<DocumentInfo>("/api/documents/upload", { method: "POST", body: form });
+}
+
+export function deleteDocument(id: number): Promise<void> {
+  return request<void>(`/api/documents/${id}`, { method: "DELETE" });
+}
+
+// ---------- Dashboard ----------
+export function getDashboardStats(): Promise<DashboardStats> {
+  return request<DashboardStats>("/api/dashboard/stats");
 }

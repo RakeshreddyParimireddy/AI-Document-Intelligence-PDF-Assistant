@@ -102,3 +102,11 @@ class MessageOut(BaseModel):
     content: str
     citations: list[Citation]
     created_at: datetime
+
+
+# ---------- Dashboard ----------
+class DashboardStats(BaseModel):
+    """Response of GET /api/dashboard/stats."""
+    documents: int
+    pages_processed: int  # pages in documents that are "ready"
+    questions_asked: int
