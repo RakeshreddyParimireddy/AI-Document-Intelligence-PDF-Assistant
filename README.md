@@ -5,9 +5,20 @@
 Upload PDFs and **chat with them**: ask questions and get answers with **page-level citations**,
 generate **summaries with key points**, and **extract structured data** (dates, names, amounts) into a table you can download as CSV — across one document or many.
 
-**🔗 Live demo:** _add your Vercel link here_ · **🎬 Demo video:** _add your video link here_
+**🔗 Live demo: [ai-document-intelligence-pdf-assist.vercel.app](https://ai-document-intelligence-pdf-assist.vercel.app)** · API docs: [documind-api-9wg6.onrender.com/docs](https://documind-api-9wg6.onrender.com/docs)
 
-![Document workspace: chat with citations and the source panel](docs/screenshots/chat.png)
+<!-- Add when ready:  **🎬 Demo video:** <link>
+![Document workspace: chat with citations and the source panel](docs/screenshots/chat.png) -->
+
+### Try the live demo
+
+1. Open the link and **create an account** (any email works — nothing is sent to it).
+2. Download a sample PDF from [`samples/`](samples/) (e.g. `sample-invoice.pdf`) and drag it onto the upload box.
+3. When it shows **Ready**, open it and ask *"What is the total amount due?"* — then try the **Summary** and **Extract** tabs.
+
+> ⏳ The backend runs on a free server that **sleeps after 15 minutes without visitors**. The first request after that takes about 30–60 seconds while it wakes up; after that it's fast.
+>
+> 🔒 This is a demo on free AI and hosting plans — **please don't upload private or sensitive documents.**
 
 ---
 
@@ -21,11 +32,13 @@ generate **summaries with key points**, and **extract structured data** (dates, 
 - **Dashboard** — drag-and-drop upload with live status (processing → ready), stats cards, chat history.
 - **Secure by default** — JWT login with bcrypt-hashed passwords; users only ever see their own documents; PDF-only uploads up to 20 MB and 30 pages.
 
+<!-- Screenshots: add PNGs to docs/screenshots/ (see docs/DEMO_SCRIPT.md), then uncomment.
 ## Screenshots
 
 | Dashboard | Summary | Extract |
 |---|---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Summary](docs/screenshots/summary.png) | ![Extract](docs/screenshots/extract.png) |
+-->
 
 ## Tech stack
 
@@ -92,9 +105,16 @@ Requires **Docker Desktop** and **Node.js 20+**.
 **1. Backend + database** (from the project folder):
 
 ```powershell
-Copy-Item .env.example .env      # then edit .env: set JWT_SECRET, and LLM_API_KEY (a free Gemini key) for AI answers
+Copy-Item .env.example .env
 docker compose up --build -d
 ```
+
+In `.env`, set:
+- `JWT_SECRET` — any long random text (e.g. run `python -c "import secrets; print(secrets.token_hex(32))"`).
+- `LLM_API_KEY` — a **free Gemini key**: [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → *Create API key* → **Copy key** (no card needed). Keep `LLM_PROVIDER=gemini` and `LLM_MODEL` empty.
+  To use Claude instead, set `LLM_PROVIDER=claude` and a Claude key from console.anthropic.com.
+
+After changing `.env`, restart the backend: `docker compose up -d --force-recreate backend`.
 
 - Health check: http://localhost:8000/api/health
 - Interactive API docs: http://localhost:8000/docs
@@ -158,7 +178,9 @@ On every push, GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)):
 
 ## Deploy
 
-Free deployment (Vercel + Render + Neon), step by step: see [DEPLOY.md](DEPLOY.md).
+Live now: frontend on **Vercel** (Next.js), backend on **Render** (free Docker web service, Singapore), database on **Neon** (free PostgreSQL + pgvector, Singapore), AI by **Gemini** (free tier) — total cost **$0/month**.
+
+Step-by-step guide to deploy your own copy: [DEPLOY.md](DEPLOY.md).
 
 ## Project structure
 
@@ -166,8 +188,8 @@ Free deployment (Vercel + Render + Neon), step by step: see [DEPLOY.md](DEPLOY.m
 ├── backend/
 │   ├── app/
 │   │   ├── main.py, config.py, database.py, models.py, schemas.py, auth.py
-│   │   ├── routers/        auth · documents · chat · insights
-│   │   └── services/       pdf_reader · chunker · embeddings · retriever · llm (all prompts)
+│   │   ├── routers/        auth · documents · chat · insights · llm_errors
+│   │   └── services/       pdf_reader · chunker · embeddings · retriever · llm (all prompts, Gemini + Claude)
 │   ├── tests/              pytest suite (LLM mocked)
 │   └── Dockerfile
 ├── frontend/
