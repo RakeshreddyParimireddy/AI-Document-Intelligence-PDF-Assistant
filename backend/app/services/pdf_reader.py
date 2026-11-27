@@ -17,3 +17,12 @@ def extract_pages(pdf_path: str) -> list[PageText]:
         for index, page in enumerate(doc):
             pages.append(PageText(page_number=index + 1, text=page.get_text().strip()))
     return pages
+
+
+def count_pages(pdf_bytes: bytes) -> int | None:
+    """Number of pages in a PDF (fast: doesn't read the text). None if it can't be opened."""
+    try:
+        with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+            return doc.page_count
+    except Exception:  # damaged or encrypted-and-broken files raise many different errors
+        return None

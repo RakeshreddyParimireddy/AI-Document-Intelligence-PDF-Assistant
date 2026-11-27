@@ -1,4 +1,6 @@
 """FastAPI entry point."""
+import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,6 +15,9 @@ from app.database import Base, engine
 from app.routers import auth, chat, documents, insights
 from app.services.embeddings import get_model
 
+# Show our own INFO messages (e.g. document processing progress) next to uvicorn's logs
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,8 +25,10 @@ async def lifespan(app: FastAPI):
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
-    # Load the embedding model now, so the first upload/question isn't slow
-    get_model()
+    # Load the embedding model in the background, so the first upload/question isn't slow.
+    # The server starts answering right away instead of waiting for it (on a small
+    # hosting plan loading takes a while, and the host waits for the server to start).
+    threading.Thread(target=get_model, daemon=True).start()
     yield
 
 

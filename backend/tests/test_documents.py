@@ -116,3 +116,27 @@ def test_delete_removes_document_chunks_and_pages(client, make_user, upload):
     assert client.get(f"/api/documents/{doc_id}", headers=headers).status_code == 404
     assert chunk_count(doc_id) == 0
     assert saved_pages(doc_id) == []
+
+
+def test_pdf_with_too_many_pages_is_rejected_and_nothing_is_saved(client, make_user, upload, monkeypatch):
+    monkeypatch.setattr(get_settings(), "max_pdf_pages", 2)
+    headers = make_user()
+    response = upload(headers, ["one", "two", "three"], "long.pdf")
+    assert response.status_code == 413
+    assert response.json()["detail"] == "This PDF has 3 pages; the limit is 2"
+    assert client.get("/api/documents", headers=headers).json() == []
+    assert list(Path(get_settings().upload_dir).rglob("*.pdf")) == []
+
+
+def test_pdf_at_the_page_limit_is_accepted(client, make_user, upload, monkeypatch):
+    monkeypatch.setattr(get_settings(), "max_pdf_pages", 3)
+    headers = make_user()
+    assert upload(headers, INVOICE_PAGES).status_code == 202  # exactly 3 pages
+
+
+def test_damaged_pdf_is_rejected(client, make_user):
+    headers = make_user()
+    files = {"file": ("broken.pdf", b"%PDF-1.7\nthis is not really a pdf", "application/pdf")}
+    response = client.post("/api/documents/upload", headers=headers, files=files)
+    assert response.status_code == 400
+    assert client.get("/api/documents", headers=headers).json() == []

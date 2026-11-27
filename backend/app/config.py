@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     llm_model: str = "claude-opus-5-5"
     upload_dir: str = "uploads"  # folder where uploaded PDFs are saved
     max_upload_mb: int = 20
+    # Longest PDF accepted. On a small server (Render free = 0.1 CPU) a dense page takes
+    # about 5 seconds to process, so 30 pages = about 2.5 minutes. Raise it on a bigger plan.
+    max_pdf_pages: int = 30
     # Website addresses allowed to call this API from a browser (comma-separated)
     cors_origins: str = "http://localhost:3000"
 

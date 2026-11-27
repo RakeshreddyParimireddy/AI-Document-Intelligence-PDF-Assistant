@@ -3,23 +3,23 @@
 | Part | Where | Cost |
 |---|---|---|
 | Database (PostgreSQL + pgvector) | [Neon](https://neon.tech) | Free |
-| Backend (FastAPI, Docker) | [Hugging Face Spaces](https://huggingface.co/spaces) | Free (CPU basic, 16 GB memory) |
+| Backend (FastAPI, Docker) | [Render](https://render.com) | Free web service (0.1 CPU, 512 MB memory) |
 | Frontend (Next.js) | [Vercel](https://vercel.com) | Free (Hobby) |
 
 ```
-Browser ──> Vercel (frontend) ──> Hugging Face Space (backend API) ──> Neon (database)
-                                              └──> Claude API (answers, summaries)
+Browser ──> Vercel (frontend) ──> Render (backend API) ──> Neon (database)
+                                        └──> Claude API (answers, summaries)
 ```
 
 Do the steps in order: each one gives you something the next one needs.
-Keep a notepad open for the values marked 📋.
+Keep a notepad open for the values marked 📋. **Never paste them into the repository or a chat.**
 
 ---
 
 ## Step 1 — Database on Neon
 
 1. Sign up at **neon.tech** (you can use your GitHub account).
-2. Create a project: name `documind`, Postgres version 16 or newer, a region near you.
+2. Create a project: name `documind`, Postgres version 16 or newer, a region near you. Remember the region.
 3. On the project dashboard click **Connect**.
    Turn **Connection pooling OFF** and copy the connection string.
    📋 It looks like `postgresql://neondb_owner:xxxx@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require`
@@ -27,36 +27,43 @@ Keep a notepad open for the values marked 📋.
 
 You don't need to create tables or turn on pgvector: the backend does that when it starts.
 
-## Step 2 — Backend on Hugging Face Spaces
+## Step 2 — Backend on Render
 
-1. Sign up at **huggingface.co**.
-2. Click your picture → **New Space**:
-   - Space name: `documind-api`
-   - SDK: **Docker** → template **Blank**
-   - Hardware: **CPU basic (free)**
-   - Visibility: **Public** (the website must be able to reach the API; your code and secrets stay protected — secrets are never shown publicly)
-3. In the Space, open **Settings → Variables and secrets** and add these as **New secret**:
+The file [`render.yaml`](render.yaml) already describes the backend (Docker, free plan, health check,
+settings), so Render sets most things up by itself.
+
+1. **Region:** in `render.yaml`, `region:` must be the Render region closest to your Neon region
+   (it can't be changed later). A far-away database makes every request slow.
+
+   | Neon region | Render `region:` |
+   |---|---|
+   | US West (Oregon) | `oregon` |
+   | US East (Ohio) | `ohio` |
+   | US East (N. Virginia) | `virginia` |
+   | Europe (Frankfurt, London) | `frankfurt` |
+   | Asia Pacific (Singapore, Sydney, Mumbai…) | `singapore` |
+
+   If you change it, commit and push before the next step.
+2. Sign up at **render.com** with your GitHub account.
+3. In the Render dashboard click **New → Blueprint**, connect GitHub if asked, and pick this repository
+   (if it isn't listed, click *Configure GitHub* and give Render access to it).
+4. Render reads `render.yaml` and shows the service **documind-api**. Give the Blueprint a name (e.g. `documind`)
+   and fill in the values it asks for:
 
    | Name | Value |
    |---|---|
    | `DATABASE_URL` | 📋 from step 1 |
-   | `JWT_SECRET` | a long random string — make one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-   | `LLM_API_KEY` | your Claude API key (from console.anthropic.com) |
+   | `LLM_API_KEY` | 📋 your Claude API key (console.anthropic.com → API Keys) |
    | `CORS_ORIGINS` | `http://localhost:3000` for now (changed in step 4) |
 
-   Optional, as **New variable**: `LLM_MODEL` = `claude-haiku-5-5` (much cheaper than the default Opus).
-4. Create an access token so GitHub can upload the code: click your picture → **Settings → Access Tokens → Create new token** → type **Write** → name `github-deploy`.
-   📋 Copy the token (starts with `hf_`).
-5. In **GitHub**, open your repository → **Settings → Secrets and variables → Actions**:
-   - **Secrets** tab → **New repository secret**: name `HF_TOKEN`, value = 📋 the `hf_...` token
-   - **Variables** tab → **New repository variable**: name `HF_SPACE`, value = `<your-hf-username>/documind-api`
-6. Deploy: GitHub → **Actions** → **CI** → **Run workflow** (on `main`).
-   When the 3 jobs are green, the Space starts building (watch it in the Space's **Logs** tab; the first build takes ~5–10 minutes).
-7. Check it: open 📋 `https://<your-hf-username>-documind-api.hf.space/api/health`
-   → `{"status":"ok","database":"connected","pgvector":true}`.
-   This address is your **backend URL**.
+   You don't type a `JWT_SECRET`: Render generates a strong random one.
+   `LLM_MODEL` is preset to `claude-haiku-5-5` (cheap); change it in the service's **Environment** page if you like.
+5. Click **Deploy Blueprint**. Open the service to watch the **Logs**; the first build takes ~5 minutes.
+6. Check it: at the top of the service page is its address, 📋 like `https://documind-api.onrender.com`
+   (Render may add letters if the name is taken). Open `<that address>/api/health`
+   → `{"status":"ok","database":"connected","pgvector":true}`. This is your **backend URL**.
 
-From now on, every push to `main` that passes the tests deploys the backend automatically.
+From now on, every push to `main` that changes `backend/` is deployed automatically — but only after the GitHub CI checks pass.
 
 ## Step 3 — Frontend on Vercel
 
@@ -64,7 +71,7 @@ From now on, every push to `main` that passes the tests deploys the backend auto
 2. **Add New → Project** → import this repository.
 3. Set **Root Directory** to `frontend` (click Edit). Framework: Next.js (detected automatically).
 4. Under **Environment Variables** add:
-   `NEXT_PUBLIC_API_URL` = 📋 your backend URL from step 2 (e.g. `https://you-documind-api.hf.space`)
+   `NEXT_PUBLIC_API_URL` = 📋 your backend URL from step 2 (e.g. `https://documind-api.onrender.com`)
 5. Click **Deploy**. When it's done you get 📋 your **live link**, like `https://documind-xxxx.vercel.app`.
 
 Vercel redeploys the frontend by itself on every push to `main`.
@@ -72,10 +79,9 @@ Vercel redeploys the frontend by itself on every push to `main`.
 ## Step 4 — Connect them (CORS)
 
 The backend only answers browsers coming from addresses it trusts.
-In the Hugging Face Space → **Settings → Variables and secrets**, edit `CORS_ORIGINS` and set it to
-📋 your Vercel link, e.g. `https://documind-xxxx.vercel.app` — you can keep localhost too:
-`https://documind-xxxx.vercel.app,http://localhost:3000`.
-The Space restarts by itself (about a minute).
+In Render → your service → **Environment**, edit `CORS_ORIGINS` and set it to 📋 your Vercel link —
+you can keep localhost too: `https://documind-xxxx.vercel.app,http://localhost:3000` — then
+**Save, rebuild, and deploy**.
 
 ## Step 5 — Try the live site
 
@@ -86,23 +92,28 @@ wait for **Ready** → ask *"What is the total amount due?"* → you should get 
 
 ## Good to know
 
-- **Sleeping:** a free Space goes to sleep after ~48 hours without visitors, and Neon pauses an idle database.
-  The first visit after that takes about a minute to wake up — normal for free hosting.
+- **Sleeping:** the free backend goes to sleep after 15 minutes without visitors, and Neon pauses an idle database.
+  The first visit after that takes about a minute — normal for free hosting. (Render's free 750 hours a month
+  are enough to run one service all month.)
+- **Small CPU, so PDFs are limited to 30 pages.** The free plan gets 0.1 of a CPU. Measured under the free plan's
+  exact limits: a 30-page PDF takes about **2½ minutes** to process (a few pages: seconds); several uploads are
+  processed one after another; and questions keep answering in **about 1 second** meanwhile.
+  Longer PDFs are refused with a clear message.
+- **Want bigger PDFs?** Render's **Starter** plan ($7/month) has 5× the CPU and never sleeps. Switch in the service's
+  settings, then raise `MAX_PDF_PAGES` in **Environment** — no code changes needed.
+- **Memory:** tested under the exact 512 MB limit with two 30-page PDFs uploaded at once: at most ~330 MB used.
 - **Your Claude bill:** anyone with the link can create an account and ask questions on your API key.
-  In **console.anthropic.com → Billing / Limits**, set a **monthly spend limit** (for example $5),
-  and consider `LLM_MODEL=claude-haiku-5-5` for the live demo.
+  In **console.anthropic.com → Billing / Limits**, set a **monthly spend limit** (for example $5).
 - **PDF files are not stored on the server.** After a PDF is processed, its text, chunks and vectors live
   in the database and the file is deleted — free hosting deletes files on every restart anyway.
-- **Never** put real secrets in the repository: they live only in Neon, the Space's secrets,
-  GitHub secrets and Vercel environment variables.
+- **Never** put real secrets in the repository: they live only in Neon, Render and Vercel.
 
 ## Something's wrong?
 
 | Problem | Fix |
 |---|---|
-| Website says it can't reach the server / "Failed to fetch" | `CORS_ORIGINS` (step 4) must exactly match the Vercel link, starting with `https://`. Also check `NEXT_PUBLIC_API_URL` in Vercel, then **Redeploy** (Vercel only reads it at build time). |
-| `/api/health` shows `"database":"unavailable"` | Check `DATABASE_URL` in the Space secrets (copy it again from Neon). |
-| Space shows "Build error" / "Runtime error" | Open the Space's **Logs** tab — the last red lines say why. |
-| "Deploy backend" job is skipped in Actions | The `HF_SPACE` variable is missing (step 2.5). |
-| "Deploy backend" job fails with 401/403 | The `HF_TOKEN` secret is wrong or isn't a **Write** token. |
-| Answers say "The AI is not configured" | Add `LLM_API_KEY` to the Space secrets. |
+| Website says it can't reach the server / "Failed to fetch" | The backend may be waking up — wait a minute and retry. Otherwise `CORS_ORIGINS` (step 4) must exactly match the Vercel link, starting with `https://`. Also check `NEXT_PUBLIC_API_URL` in Vercel, then **Redeploy** (Vercel only reads it at build time). |
+| `/api/health` shows `"database":"unavailable"` | Check `DATABASE_URL` in Render → Environment (copy it again from Neon). |
+| Deploy failed on Render | Open the service's **Logs** / **Events** — the last red lines say why. |
+| A push didn't deploy | Render waits for the GitHub CI checks to pass, and only deploys changes in `backend/`. Check the **Actions** tab on GitHub. |
+| Answers say "The AI is not configured" | Add `LLM_API_KEY` in Render → Environment. |

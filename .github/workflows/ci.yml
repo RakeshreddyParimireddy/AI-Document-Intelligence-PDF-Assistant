@@ -1,4 +1,5 @@
 # CI: on every push (and pull request), GitHub runs our checks on a fresh computer.
+# CD: Render deploys the backend and Vercel the frontend, only after these checks pass on main.
 # A red ❌ on GitHub means something is broken; a green ✅ means all checks passed.
 name: CI
 
@@ -43,6 +44,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://documind:documind@localhost:5432/documind
       JWT_SECRET: ci-only-test-secret
+      FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
 
     defaults:
       run:
@@ -58,16 +60,13 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install packages
-        run: |
-          # CPU-only PyTorch: much smaller and faster to install than the GPU version
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       # Keep the downloaded embedding model between runs, so it isn't downloaded every time
       - uses: actions/cache@v4
         with:
-          path: ~/.cache/huggingface
-          key: hf-all-MiniLM-L6-v2
+          path: /home/runner/.cache/fastembed
+          key: fastembed-all-MiniLM-L6-v2
 
       - name: Run tests
         run: pytest -v
@@ -102,41 +101,3 @@ jobs:
       # After the build, so Next.js has generated its route types
       - name: Type check
         run: npx tsc --noEmit
-
-  # CD: after all checks pass on main, upload the backend to your Hugging Face Space,
-  # which then rebuilds and restarts it. (The frontend is deployed by Vercel itself.)
-  # Skipped until you add the HF_SPACE variable and HF_TOKEN secret (see DEPLOY.md).
-  deploy-backend:
-    name: Deploy backend to Hugging Face
-    needs: [backend-tests, frontend-checks]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.HF_SPACE != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Upload backend to the Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE: ${{ vars.HF_SPACE }}
-        run: |
-          pip install huggingface_hub
-          python - <<'PY'
-          import os
-          from huggingface_hub import HfApi
-
-          HfApi(token=os.environ["HF_TOKEN"]).upload_folder(
-              repo_id=os.environ["HF_SPACE"],
-              repo_type="space",
-              folder_path="backend",
-              ignore_patterns=["tests/**", "**/__pycache__/**", ".pytest_cache/**"],
-              delete_patterns="*",  # remove files that no longer exist in backend/
-              commit_message=f"Deploy {os.environ['GITHUB_SHA'][:7]}",
-          )
-          print("Uploaded. The Space is rebuilding now.")
-          PY

@@ -1,0 +1,26 @@
+# Render "Blueprint": tells Render how to run the backend (see DEPLOY.md).
+# Render reads this file when you click New -> Blueprint and pick this repository.
+services:
+  - type: web
+    name: documind-api
+    runtime: docker
+    plan: free # 0.1 CPU, 512 MB memory; sleeps after 15 minutes without visitors
+    region: oregon # can't be changed later - pick the one closest to your Neon database
+    rootDir: backend # Render only redeploys when files in backend/ change
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass # deploy a new commit only after GitHub CI passes
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Render asks you for this (your Neon connection string)
+      - key: LLM_API_KEY
+        sync: false # Render asks you for this (your Claude API key)
+      - key: CORS_ORIGINS
+        sync: false # Render asks you for this (your Vercel link)
+      - key: JWT_SECRET
+        generateValue: true # Render creates a strong random secret for you
+      - key: LLM_MODEL
+        value: claude-haiku-5-5 # cheaper model for the public demo
+      - key: MAX_PDF_PAGES
+        value: "30" # a 30-page PDF takes ~2.5 minutes on the free plan's 0.1 CPU

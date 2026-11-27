@@ -72,6 +72,8 @@ export type ExtractResult = {
 
 // Must match MAX_UPLOAD_MB on the backend (the backend checks too)
 export const MAX_UPLOAD_MB = 20;
+// Must match MAX_PDF_PAGES on the backend (only the backend can count pages, so it checks)
+export const MAX_PDF_PAGES = 30;
 
 // ---------- Errors ----------
 export class ApiError extends Error {

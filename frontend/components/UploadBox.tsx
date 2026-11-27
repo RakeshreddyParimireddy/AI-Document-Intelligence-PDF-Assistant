@@ -4,7 +4,7 @@
 // they are uploaded one after another.
 
 import { useRef, useState } from "react";
-import { MAX_UPLOAD_MB } from "@/lib/api";
+import { MAX_PDF_PAGES, MAX_UPLOAD_MB } from "@/lib/api";
 import { useDocuments } from "@/components/DocumentsProvider";
 
 // Returns an error message, or null if the file looks OK
@@ -81,7 +81,7 @@ export default function UploadBox() {
             <p className="font-medium text-slate-700">
               Drag & drop PDFs here, or <span className="text-indigo-600">browse</span>
             </p>
-            <p className="mt-1 text-sm text-slate-500">PDF only, up to {MAX_UPLOAD_MB} MB each</p>
+            <p className="mt-1 text-sm text-slate-500">PDF only, up to {MAX_UPLOAD_MB} MB and {MAX_PDF_PAGES} pages each</p>
           </>
         )}
         <input

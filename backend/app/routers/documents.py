@@ -1,5 +1,7 @@
 """Document routes: upload a PDF, list, view, and delete your documents."""
 import logging
+import threading
+import time
 import os
 from pathlib import Path
 
@@ -14,10 +16,16 @@ from app.models import DocumentPage, Chunk, Document, DocumentStatus, User
 from app.schemas import DocumentOut, SearchRequest, SearchResult
 from app.services.chunker import chunk_pages
 from app.services.embeddings import embed_texts
-from app.services.pdf_reader import extract_pages
+from app.services.pdf_reader import count_pages, extract_pages
 from app.services.retriever import search_chunks
 
 logger = logging.getLogger(__name__)
+EMBED_PROGRESS_EVERY = 64  # log embedding progress after every 64 chunks
+
+# Process one document at a time. On a small server two at once would each take twice
+# as long (and use twice the memory); one after the other, the first is ready sooner,
+# and users' questions only have to share the CPU with one job.
+_processing_lock = threading.Lock()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 READ_CHUNK_BYTES = 1024 * 1024  # read uploads 1 MB at a time
@@ -49,6 +57,11 @@ def process_document(document_id: int) -> None:
     is already closed by the time this runs. Afterwards the PDF file is deleted:
     everything we need (page text, chunks, vectors) is in the database.
     """
+    with _processing_lock:
+        _process_document(document_id)
+
+
+def _process_document(document_id: int) -> None:
     db = SessionLocal()
     path = None
     try:
@@ -56,6 +69,8 @@ def process_document(document_id: int) -> None:
         if document is None:  # deleted before processing started
             return
         path = pdf_path(document)
+        started = time.monotonic()
+        logger.info("Document %s: processing started", document_id)
         try:
             # 1. Read the text of each page, and keep it (for Summary and Extract)
             pages = extract_pages(str(path))
@@ -68,13 +83,23 @@ def process_document(document_id: int) -> None:
 
             # 2. Split into chunks (each remembers its page number)
             chunks = chunk_pages(pages)
+            logger.info(
+                "Document %s: read %d pages -> %d chunks", document_id, len(pages), len(chunks)
+            )
 
             # A scanned PDF (only images) has no text we can use
             if not chunks:
                 document.status = DocumentStatus.FAILED
             else:
-                # 3. Turn every chunk into a vector, 4. save chunks + vectors
-                vectors = embed_texts([chunk.content for chunk in chunks])
+                # 3. Turn every chunk into a vector (in parts, so progress shows in the logs)
+                vectors = []
+                for start in range(0, len(chunks), EMBED_PROGRESS_EVERY):
+                    part = chunks[start : start + EMBED_PROGRESS_EVERY]
+                    vectors.extend(embed_texts([chunk.content for chunk in part]))
+                    logger.info(
+                        "Document %s: embedded %d/%d chunks", document_id, len(vectors), len(chunks)
+                    )
+                # 4. Save chunks + vectors
                 db.add_all(
                     Chunk(
                         document_id=document.id,
@@ -86,6 +111,10 @@ def process_document(document_id: int) -> None:
                 )
                 document.status = DocumentStatus.READY
             db.commit()
+            logger.info(
+                "Document %s: %s in %.0fs",
+                document_id, document.status, time.monotonic() - started,
+            )
         except Exception:
             logger.exception("Processing failed for document %s", document_id)
             db.rollback()  # throw away any half-saved chunks
@@ -127,7 +156,17 @@ async def upload_document(
     if not data.startswith(b"%PDF-"):
         raise HTTPException(status_code=400, detail="File is not a valid PDF")
 
-    # 4. Save the document row first, so we get an id to name the file with
+    # 4. Check the number of pages (long PDFs take too long to process on a small server)
+    page_count = count_pages(bytes(data))
+    if page_count is None:
+        raise HTTPException(status_code=400, detail="This PDF couldn't be opened")
+    if page_count > settings.max_pdf_pages:
+        raise HTTPException(
+            status_code=413,
+            detail=f"This PDF has {page_count} pages; the limit is {settings.max_pdf_pages}",
+        )
+
+    # 5. Save the document row first, so we get an id to name the file with
     document = Document(
         user_id=current_user.id,
         filename=filename[:255],
@@ -138,12 +177,12 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
-    # 5. Save the PDF to disk (only until it has been processed)
+    # 6. Save the PDF to disk (only until it has been processed)
     path = pdf_path(document)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
 
-    # 6. Read the text after the response is sent, so the upload feels fast
+    # 7. Read the text after the response is sent, so the upload feels fast
     background_tasks.add_task(process_document, document.id)
     return document
 

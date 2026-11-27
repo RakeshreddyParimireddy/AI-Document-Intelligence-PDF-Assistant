@@ -19,7 +19,7 @@ generate **summaries with key points**, and **extract structured data** (dates, 
 - **Summaries** — a short summary plus key points, saved so reopening it is instant and free.
 - **Field extraction** — type fields like *Invoice date* or *Total amount* → a table of value + page, downloadable as CSV.
 - **Dashboard** — drag-and-drop upload with live status (processing → ready), stats cards, chat history.
-- **Secure by default** — JWT login with bcrypt-hashed passwords; users only ever see their own documents; PDF-only uploads up to 20 MB.
+- **Secure by default** — JWT login with bcrypt-hashed passwords; users only ever see their own documents; PDF-only uploads up to 20 MB and 30 pages.
 
 ## Screenshots
 
@@ -35,23 +35,23 @@ generate **summaries with key points**, and **extract structured data** (dates, 
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2 |
 | Database | PostgreSQL 16 + **pgvector** (HNSW index, cosine distance) |
 | PDF parsing | PyMuPDF |
-| Embeddings | sentence-transformers `all-MiniLM-L6-v2` (384-dim, runs locally — free) |
+| Embeddings | `all-MiniLM-L6-v2` via fastembed / ONNX Runtime (384-dim, runs locally — free, no PyTorch) |
 | LLM | Claude via the Anthropic SDK, with JSON-schema structured outputs |
 | Auth | JWT (PyJWT) + bcrypt |
 | Testing | pytest — 47 tests, LLM mocked, separate test database |
 | DevOps | Docker, docker-compose, GitHub Actions CI/CD |
-| Hosting | Vercel (frontend) · Hugging Face Spaces (backend) · Neon (database) |
+| Hosting | Vercel (frontend) · Render (backend) · Neon (database) |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     U([User's browser]) --> FE["Next.js frontend<br/>(Vercel)"]
-    FE -- "REST + JWT" --> API["FastAPI backend<br/>(Docker · Hugging Face Spaces)"]
+    FE -- "REST + JWT" --> API["FastAPI backend<br/>(Docker · Render)"]
     API --> DB[("PostgreSQL + pgvector<br/>(Neon)")]
     API --> EMB["Embedding model<br/>all-MiniLM-L6-v2 (local)"]
     API --> LLM["Claude API"]
-    GH["GitHub Actions"] -- "tests pass → deploy" --> API
+    GH["GitHub Actions"] -- "tests pass → Render deploys" --> API
 ```
 
 ### How a question is answered (RAG)
@@ -81,6 +81,7 @@ flowchart TD
 - **No retrieved text → no LLM call** — the app answers "not found" for free.
 - **Summary and Extract read the whole document** (with page markers) instead of a few chunks, so nothing is missed; very long documents are cut with a visible note, never silently.
 - **Page text lives in the database**, and the PDF file is deleted after processing — works on free hosting where files vanish on restart.
+- **Runs on a free 512 MB / 0.1 CPU server** — the embedding model runs on ONNX Runtime instead of PyTorch (identical vectors, much less memory) with one thread, in small batches; uploads are processed one at a time while questions never wait for them. Stress-tested under those exact limits: ~330 MB used, a 30-page PDF ready in ~2½ minutes, questions answered in ~1 s during processing.
 - **CSV export is formula-injection safe** (values starting with `=`, `+`, `-`, `@` are escaped).
 
 ## Run it locally
@@ -122,7 +123,7 @@ All routes except register/login need `Authorization: Bearer <token>`. Full inte
 |---|---|---|
 | POST | `/api/auth/register` · `/api/auth/login` | Create an account · get a JWT |
 | GET | `/api/auth/me` | The logged-in user |
-| POST | `/api/documents/upload` | Upload a PDF (max 20 MB), processed in the background |
+| POST | `/api/documents/upload` | Upload a PDF (max 20 MB / 30 pages), processed in the background |
 | GET | `/api/documents` · `/api/documents/{id}` | My documents · one document's status |
 | DELETE | `/api/documents/{id}` | Delete a document and everything about it |
 | POST | `/api/documents/search` | Top matching chunks for a question (no LLM) |
@@ -150,11 +151,11 @@ On every push, GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)):
 
 1. runs all backend tests against a fresh PostgreSQL + pgvector database,
 2. lints, builds and type-checks the frontend,
-3. on `main`, once both pass, deploys the backend to Hugging Face Spaces. Vercel deploys the frontend.
+3. on `main`, once both pass, Render deploys the backend (`autoDeployTrigger: checksPass` in [`render.yaml`](render.yaml)); Vercel deploys the frontend.
 
 ## Deploy
 
-Free deployment (Vercel + Hugging Face Spaces + Neon), step by step: see [DEPLOY.md](DEPLOY.md).
+Free deployment (Vercel + Render + Neon), step by step: see [DEPLOY.md](DEPLOY.md).
 
 ## Project structure
 
@@ -173,7 +174,7 @@ Free deployment (Vercel + Hugging Face Spaces + Neon), step by step: see [DEPLOY
 ├── samples/                sample PDFs to try
 ├── docker-compose.yml
 ├── .github/workflows/ci.yml
-└── PLAN.md · DEPLOY.md
+└── PLAN.md · DEPLOY.md · render.yaml
 ```
 
 ## Security notes
@@ -181,5 +182,5 @@ Free deployment (Vercel + Hugging Face Spaces + Neon), step by step: see [DEPLOY
 - Secrets (database URL, JWT secret, API key) come only from environment variables; `.env` is git-ignored.
 - Passwords are hashed with bcrypt; login errors don't reveal whether an email exists.
 - Every document, chat and search is filtered by the logged-in user; other users' items return 404.
-- Uploads: `.pdf` only, checked by file signature, 20 MB limit, read in 1 MB pieces.
+- Uploads: `.pdf` only, checked by file signature, 20 MB and 30-page limits, read in 1 MB pieces.
 - The backend container runs as a non-root user; CI has read-only repository access.
