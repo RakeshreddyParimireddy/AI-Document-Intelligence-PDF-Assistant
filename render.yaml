@@ -5,7 +5,7 @@ services:
     name: documind-api
     runtime: docker
     plan: free # 0.1 CPU, 512 MB memory; sleeps after 15 minutes without visitors
-    region: oregon # can't be changed later - pick the one closest to your Neon database
+    region: singapore # same area as the Neon database (ap-southeast-1); can't be changed later
     rootDir: backend # Render only redeploys when files in backend/ change
     dockerfilePath: ./Dockerfile
     dockerContext: .
