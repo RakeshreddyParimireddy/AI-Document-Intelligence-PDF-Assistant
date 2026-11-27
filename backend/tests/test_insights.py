@@ -2,6 +2,7 @@
 import json
 from types import SimpleNamespace
 
+from app.config import get_settings
 from app.services import llm
 from tests.conftest import INVOICE_PAGES
 
@@ -24,7 +25,8 @@ class FakeClaude:
 
 def test_summary_works_after_the_pdf_file_is_gone(client, make_user, upload, monkeypatch):
     fake = FakeClaude()
-    monkeypatch.setattr(llm, "get_client", lambda: fake)
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+    monkeypatch.setattr(llm, "get_claude_client", lambda: fake)
     headers = make_user()
     doc_id = upload(headers, INVOICE_PAGES, "invoice.pdf").json()["id"]
 

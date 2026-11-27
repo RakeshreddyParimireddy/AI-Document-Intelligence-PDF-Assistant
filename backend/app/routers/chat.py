@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import Chat, ChatDocument, Document, Message, User
 from app.schemas import AskRequest, ChatCreate, ChatOut, Citation, MessageOut
 from app.services import llm
+from app.routers.llm_errors import run_llm
 from app.services.retriever import search_chunks
 
 router = APIRouter(prefix="/api/chats", tags=["chat"])
@@ -110,16 +111,7 @@ def ask(
         # Nothing to search (e.g. documents deleted or still processing)
         answer, citations = llm.NOT_FOUND_ANSWER, []
     else:
-        try:
-            result = llm.answer_question(question, chunks)
-        except llm.LLMNotConfiguredError:
-            raise HTTPException(
-                status_code=503, detail="The AI is not configured: set LLM_API_KEY in .env"
-            )
-        except llm.LLMServiceError:
-            raise HTTPException(
-                status_code=502, detail="The AI service failed. Please try again."
-            )
+        result = run_llm(lambda: llm.answer_question(question, chunks))
         answer = result.answer
         citations = [
             Citation(

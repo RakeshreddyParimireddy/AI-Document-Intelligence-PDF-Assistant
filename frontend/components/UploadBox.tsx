@@ -82,6 +82,9 @@ export default function UploadBox() {
               Drag & drop PDFs here, or <span className="text-indigo-600">browse</span>
             </p>
             <p className="mt-1 text-sm text-slate-500">PDF only, up to {MAX_UPLOAD_MB} MB and {MAX_PDF_PAGES} pages each</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Demo app: please don&apos;t upload private or sensitive documents.
+            </p>
           </>
         )}
         <input

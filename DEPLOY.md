@@ -8,7 +8,7 @@
 
 ```
 Browser ──> Vercel (frontend) ──> Render (backend API) ──> Neon (database)
-                                        └──> Claude API (answers, summaries)
+                                        └──> Gemini API (answers, summaries, extraction)
 ```
 
 Do the steps in order: each one gives you something the next one needs.
@@ -53,11 +53,15 @@ settings), so Render sets most things up by itself.
    | Name | Value |
    |---|---|
    | `DATABASE_URL` | 📋 from step 1 |
-   | `LLM_API_KEY` | 📋 your Claude API key (console.anthropic.com → API Keys) |
+   | `LLM_API_KEY` | 📋 your free Gemini API key (see below) |
    | `CORS_ORIGINS` | `http://localhost:3000` for now (changed in step 4) |
 
    You don't type a `JWT_SECRET`: Render generates a strong random one.
-   `LLM_MODEL` is preset to `claude-haiku-5-5` (cheap); change it in the service's **Environment** page if you like.
+   `LLM_PROVIDER` is preset to `gemini`.
+
+   **Getting a free Gemini key:** go to **aistudio.google.com/apikey**, sign in with a Google account,
+   click **Create API key**, and copy it with the **Copy key** button. No card needed.
+   New keys are "auth keys" starting with `AQ.` (older keys start with `AIza`); both work.
 5. Click **Deploy Blueprint**. Open the service to watch the **Logs**; the first build takes ~5 minutes.
 6. Check it: at the top of the service page is its address, 📋 like `https://documind-api.onrender.com`
    (Render may add letters if the name is taken). Open `<that address>/api/health`
@@ -101,9 +105,14 @@ wait for **Ready** → ask *"What is the total amount due?"* → you should get 
   Longer PDFs are refused with a clear message.
 - **Want bigger PDFs?** Render's **Starter** plan ($7/month) has 5× the CPU and never sleeps. Switch in the service's
   settings, then raise `MAX_PDF_PAGES` in **Environment** — no code changes needed.
-- **Memory:** tested under the exact 512 MB limit with two 30-page PDFs uploaded at once: at most ~330 MB used.
-- **Your Claude bill:** anyone with the link can create an account and ask questions on your API key.
-  In **console.anthropic.com → Billing / Limits**, set a **monthly spend limit** (for example $5).
+- **Memory:** tested under the exact 512 MB limit with two 30-page PDFs uploaded at once: at most ~350 MB used.
+- **Gemini free tier — privacy:** Google may use text sent on the free tier to improve its products, and human
+  reviewers may read it. That's why the upload box says *"Demo app: please don't upload private or sensitive
+  documents"*. Use the sample PDFs for demos.
+- **Gemini free tier — limits:** it allows only a limited number of requests per minute and per day. When the limit
+  is hit, users see *"The AI is busy right now (free plan limit). Please try again in a minute."*
+- **Using Claude instead (paid):** set `LLM_PROVIDER` to `claude` and `LLM_API_KEY` to a Claude key in Render →
+  Environment. Set a **monthly spend limit** in console.anthropic.com first: anyone with the link can ask questions.
 - **PDF files are not stored on the server.** After a PDF is processed, its text, chunks and vectors live
   in the database and the file is deleted — free hosting deletes files on every restart anyway.
 - **Never** put real secrets in the repository: they live only in Neon, Render and Vercel.
@@ -116,4 +125,6 @@ wait for **Ready** → ask *"What is the total amount due?"* → you should get 
 | `/api/health` shows `"database":"unavailable"` | Check `DATABASE_URL` in Render → Environment (copy it again from Neon). |
 | Deploy failed on Render | Open the service's **Logs** / **Events** — the last red lines say why. |
 | A push didn't deploy | Render waits for the GitHub CI checks to pass, and only deploys changes in `backend/`. Check the **Actions** tab on GitHub. |
-| Answers say "The AI is not configured" | Add `LLM_API_KEY` in Render → Environment. |
+| Answers say "The AI isn't set up on this server yet" | Add `LLM_API_KEY` in Render → Environment. |
+| Answers say "The AI service failed" | The key may be wrong, or the model name invalid: check `LLM_API_KEY` (and `LLM_MODEL`, if you set one) and the Render **Logs**. |
+| Deploy fails with "LLM_MODEL=… doesn't match LLM_PROVIDER=…" | Remove `LLM_MODEL` (or set a model of the chosen provider). |

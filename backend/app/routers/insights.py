@@ -7,6 +7,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Chat, Document, DocumentPage, DocumentStatus, Message, Summary, User
 from app.routers.documents import get_own_document, pdf_path
+from app.routers.llm_errors import run_llm
 from app.schemas import DashboardStats, ExtractOut, ExtractRequest, ExtractedFieldOut, SummaryOut
 from app.services import llm
 from app.services.pdf_reader import extract_pages
@@ -50,18 +51,6 @@ def read_document_text(document: Document, db: Session) -> tuple[str, str | None
             f"{len(pages)} pages with text were read."
         )
     return text, note
-
-
-def run_llm(task):
-    """Run an LLM task and turn its errors into clear HTTP errors."""
-    try:
-        return task()
-    except llm.LLMNotConfiguredError:
-        raise HTTPException(
-            status_code=503, detail="The AI is not configured: set LLM_API_KEY in .env"
-        )
-    except llm.LLMServiceError:
-        raise HTTPException(status_code=502, detail="The AI service failed. Please try again.")
 
 
 # ---------- Summary ----------

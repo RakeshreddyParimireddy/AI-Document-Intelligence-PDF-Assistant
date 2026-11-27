@@ -15,7 +15,7 @@ so you don't wait on camera — but keep one to upload live.
 | 1:05–1:20 | **Summary** tab → *Generate summary* | "Summary reads the whole document and gives a short summary plus key points." |
 | 1:20–1:40 | **Extract** tab → add *Invoice date*, *Total amount*, *Sales contact* → Extract → **Download CSV**, open it | "Extract pulls structured fields into a table with page numbers — downloadable as CSV." |
 | 1:40–1:55 | **Multi-doc chat** → select both PDFs → ask *"When is the invoice payment due, and how many vacation days do employees get?"* | "Multi-document chat answers across several PDFs at once, citing each document." |
-| 1:55–2:10 | GitHub: README badge → **Actions** tab with green runs | "It's built with Next.js, FastAPI, pgvector and Claude, has 47 automated tests, and GitHub Actions tests and deploys it on every push." |
+| 1:55–2:10 | GitHub: README badge → **Actions** tab with green runs | "It's built with Next.js, FastAPI, pgvector and an LLM (Gemini or Claude), has 58 automated tests, and GitHub Actions tests and deploys it on every push." |
 
 ## Screenshots for the README
 

@@ -7,6 +7,7 @@ import anthropic
 import httpx
 import pytest
 
+from app.config import get_settings
 from app.services import llm
 from tests.conftest import HANDBOOK_PAGES, INVOICE_PAGES
 
@@ -37,7 +38,8 @@ def fake_claude(monkeypatch):
 
     def _install(reply):
         fake = FakeClaude(reply)
-        monkeypatch.setattr(llm, "get_client", lambda: fake)
+        monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+        monkeypatch.setattr(llm, "get_claude_client", lambda: fake)
         return fake
 
     return _install

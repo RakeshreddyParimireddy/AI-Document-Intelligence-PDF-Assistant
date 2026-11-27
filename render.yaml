@@ -15,12 +15,12 @@ services:
       - key: DATABASE_URL
         sync: false # Render asks you for this (your Neon connection string)
       - key: LLM_API_KEY
-        sync: false # Render asks you for this (your Claude API key)
+        sync: false # Render asks you for this (your Gemini API key)
       - key: CORS_ORIGINS
         sync: false # Render asks you for this (your Vercel link)
       - key: JWT_SECRET
         generateValue: true # Render creates a strong random secret for you
-      - key: LLM_MODEL
-        value: claude-haiku-5-5 # cheaper model for the public demo
+      - key: LLM_PROVIDER
+        value: gemini # free tier; set to "claude" (with a Claude key) to use Claude instead
       - key: MAX_PDF_PAGES
         value: "30" # a 30-page PDF takes ~2.5 minutes on the free plan's 0.1 CPU

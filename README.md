@@ -36,9 +36,9 @@ generate **summaries with key points**, and **extract structured data** (dates, 
 | Database | PostgreSQL 16 + **pgvector** (HNSW index, cosine distance) |
 | PDF parsing | PyMuPDF |
 | Embeddings | `all-MiniLM-L6-v2` via fastembed / ONNX Runtime (384-dim, runs locally — free, no PyTorch) |
-| LLM | Claude via the Anthropic SDK, with JSON-schema structured outputs |
+| LLM | Google Gemini (free tier, `google-genai` SDK) or Anthropic Claude (`anthropic` SDK) — one setting, same prompts, JSON-schema structured outputs |
 | Auth | JWT (PyJWT) + bcrypt |
-| Testing | pytest — 47 tests, LLM mocked, separate test database |
+| Testing | pytest — 58 tests, LLM mocked (Gemini and Claude), separate test database |
 | DevOps | Docker, docker-compose, GitHub Actions CI/CD |
 | Hosting | Vercel (frontend) · Render (backend) · Neon (database) |
 
@@ -50,7 +50,7 @@ flowchart LR
     FE -- "REST + JWT" --> API["FastAPI backend<br/>(Docker · Render)"]
     API --> DB[("PostgreSQL + pgvector<br/>(Neon)")]
     API --> EMB["Embedding model<br/>all-MiniLM-L6-v2 (local)"]
-    API --> LLM["Claude API"]
+    API --> LLM["LLM API<br/>(Gemini or Claude)"]
     GH["GitHub Actions"] -- "tests pass → Render deploys" --> API
 ```
 
@@ -68,7 +68,7 @@ flowchart TD
         Q[Question] --> QE[Embed the question]
         QE --> S["Find the closest chunks<br/>(top 5, or 8 across several docs)<br/>— only the user's own documents"]
         E -.-> S
-        S --> P["Send question + chunks to Claude:<br/>answer ONLY from these excerpts,<br/>say which ones you used"]
+        S --> P["Send question + chunks to the LLM:<br/>answer ONLY from these excerpts,<br/>say which ones you used"]
         P --> R["Answer + citations<br/>[document, page, snippet]"]
     end
 ```
@@ -77,11 +77,12 @@ flowchart TD
 
 - **Search by meaning, not keywords** — "vacation days" finds a page that only says "annual leave".
 - **Chunks never cross pages**, so every citation points at one exact page.
-- **Structured outputs** — Claude replies in a fixed JSON schema (`found`, `answer`, `sources`); the backend checks every cited excerpt number, so a citation can never point at text that wasn't retrieved.
+- **Structured outputs** — the LLM replies in a fixed JSON schema (`found`, `answer`, `sources`); the backend checks every cited excerpt number, so a citation can never point at text that wasn't retrieved.
+- **Swappable LLM provider** — `LLM_PROVIDER=gemini` (free tier) or `claude`; all calls and prompts live in one file (`services/llm.py`), and rate limits show a friendly "try again in a minute" message.
 - **No retrieved text → no LLM call** — the app answers "not found" for free.
 - **Summary and Extract read the whole document** (with page markers) instead of a few chunks, so nothing is missed; very long documents are cut with a visible note, never silently.
 - **Page text lives in the database**, and the PDF file is deleted after processing — works on free hosting where files vanish on restart.
-- **Runs on a free 512 MB / 0.1 CPU server** — the embedding model runs on ONNX Runtime instead of PyTorch (identical vectors, much less memory) with one thread, in small batches; uploads are processed one at a time while questions never wait for them. Stress-tested under those exact limits: ~330 MB used, a 30-page PDF ready in ~2½ minutes, questions answered in ~1 s during processing.
+- **Runs on a free 512 MB / 0.1 CPU server** — the embedding model runs on ONNX Runtime instead of PyTorch (identical vectors, much less memory) with one thread, in small batches; uploads are processed one at a time while questions never wait for them. Stress-tested under those exact limits: ~350 MB used, a 30-page PDF ready in ~2½ minutes, questions answered in ~1 s during processing.
 - **CSV export is formula-injection safe** (values starting with `=`, `+`, `-`, `@` are escaped).
 
 ## Run it locally
@@ -91,7 +92,7 @@ Requires **Docker Desktop** and **Node.js 20+**.
 **1. Backend + database** (from the project folder):
 
 ```powershell
-Copy-Item .env.example .env      # then edit the values in .env (set JWT_SECRET, and LLM_API_KEY for AI answers)
+Copy-Item .env.example .env      # then edit .env: set JWT_SECRET, and LLM_API_KEY (a free Gemini key) for AI answers
 docker compose up --build -d
 ```
 
@@ -113,7 +114,9 @@ Open http://localhost:3000, create an account, and upload a PDF from `samples/`.
 
 Stop the backend with `docker compose down` (add `-v` to also delete the database data).
 
-> Without `LLM_API_KEY`, everything works except AI answers, summaries and extraction (they show a clear "AI is not configured" message).
+> Without `LLM_API_KEY`, everything works except AI answers, summaries and extraction (they show "The AI isn't set up on this server yet").
+>
+> **Privacy:** on Gemini's free tier, Google may use the text sent to it to improve its products, and human reviewers may read it. The live demo therefore asks users not to upload private or sensitive documents.
 
 ## API
 
@@ -137,7 +140,7 @@ All routes except register/login need `Authorization: Bearer <token>`. Full inte
 
 ## Tests
 
-47 pytest tests cover auth, upload validation and processing, the chunker, vector retrieval,
+58 pytest tests cover auth, upload validation and limits, processing, the chunker, vector retrieval,
 RAG answers, summaries and settings. They use a separate `documind_test` database and a **fake LLM**,
 so no API key is needed and nothing costs money.
 
